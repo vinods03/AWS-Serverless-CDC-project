@@ -1,0 +1,30 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from pyspark.sql.functions import expr, col
+
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['JOB_NAME','appName','file_name'])
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+appName = args['appName']
+file_name = args['file_name']
+
+source_bucket = 's3://my-cdc-project-bucket/'
+target_bucket = 's3://my-cdc-project-output-bucket/'
+final_path = source_bucket + file_name
+
+df = spark.read.options(header='False', inferSchema='True', delimiter=',').csv(final_path)
+df = df.withColumnRenamed('_c0','id').withColumnRenamed('_c1','FullName').withColumnRenamed('_c2','City')
+# df.show()
+df.write.mode("append").options(header='True', delimiter=',').csv(target_bucket)
+
+job.commit()

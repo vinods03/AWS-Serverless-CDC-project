@@ -1,0 +1,65 @@
+import boto3, json, time
+
+dynamodb = boto3.resource('dynamodb')
+audit_table = dynamodb.Table('cdc-project-audit-table')
+
+glue = boto3.client('glue')
+
+def lambda_handler(event, context):
+    print('The event is: ', event)
+    
+    items_to_append = []
+    
+    for record in event['Records']:
+        print('The message id is ', record['messageId'])
+        
+        s3_event = json.loads(record['body'])
+        print('The s3 event is ', s3_event)
+        
+        for subrecord in s3_event['Records']:
+            bucket_name = subrecord['s3']['bucket']['name']
+            file_name = subrecord['s3']['object']['key']
+            file_size = subrecord['s3']['object']['size']
+            file_etag = subrecord['s3']['object']['eTag']
+            print('The bucket name is ', bucket_name)
+            print('The file name is ', file_name)
+            print('The file size is ', file_size)
+            print('The file eTag is ', file_etag)
+            
+            item = {'file_name': file_name, 'layer_name': 'landing_layer', 'file_size': file_size, 'file_etag': file_etag, 'create_timestamp': time.strftime("%H:%M:%S",time.localtime())}
+            items_to_append.append(item)
+            
+            if 'LOAD' in file_name:
+                glue_job_name = 'glue-cdc-job'
+            else:
+                glue_job_name = 'glue-cdc-job-changes'
+                
+            print('The glue job that is going to be triggered is ', glue_job_name)
+            
+            try:
+                
+                glue_job_response = glue.start_job_run(JobName = glue_job_name, Arguments = {'--file_name': file_name})
+                glue_job_run_id = glue_job_response['JobRunId']
+                glue_job_status = glue.get_job_run(JobName = glue_job_name, RunId = glue_job_run_id)['JobRun']['JobRunState']
+                print('The status of the glue job is ', glue_job_status)
+                
+                while not(glue.get_job_run(JobName = glue_job_name, RunId = glue_job_run_id)['JobRun']['JobRunState'] == 'SUCCEEDED' or glue.get_job_run(JobName = glue_job_name, RunId = glue_job_run_id)['JobRun']['JobRunState'] == 'FAILED'):
+                    time.sleep(15)
+                        
+                print('The status of the glue job ', glue_job_name, ' is ', glue.get_job_run(JobName = glue_job_name, RunId = glue_job_run_id)['JobRun']['JobRunState'])
+                
+            except Exception as e:
+                
+                print('Unable to start the glue job ', glue_job_name, '. The exception is ', e )
+            
+    try:
+        
+        with audit_table.batch_writer() as batch:
+            for item in items_to_append:
+                batch.put_item(item)
+                
+        print('Audit table loaded successfully')
+    
+    except Exception as e:
+        
+        print('Audit table load failed with exception ', e)

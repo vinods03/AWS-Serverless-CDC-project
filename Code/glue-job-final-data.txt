@@ -1,0 +1,64 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from pyspark.sql.functions import expr, col
+
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['JOB_NAME','appName','file_name'])
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+appName = args['appName']
+file_name = args['file_name']
+
+source_bucket = 's3://my-cdc-project-bucket/'
+target_bucket = 's3://my-cdc-project-output-bucket/'
+main_file_name = 'dev/Persons/LOAD00000001.csv'
+source_main_final_path = source_bucket + main_file_name
+source_change_final_path = source_bucket + file_name
+
+changes_df = spark.read.options(header='False', inferSchema='True', delimiter=',').csv(source_change_final_path)
+changes_df = changes_df.withColumnRenamed('_c0','Action').withColumnRenamed('_c1','changesID').withColumnRenamed('_c2','changesFullName')
+changes_df = changes_df.withColumnRenamed('_c3','changesCity')
+# changes_df.show()
+    
+print('******************* Main data joined with Changes data ***********************')
+full_df = spark.read.options(header='False', inferSchema='True', delimiter=',').csv(source_main_final_path)
+full_df = full_df.withColumnRenamed('_c0','id').withColumnRenamed('_c1','FullName').withColumnRenamed('_c2','City')
+full_df = full_df.join(changes_df, full_df.id == changes_df.changesID, 'left')
+# full_df.show()
+
+print('******************* Update completed ***********************')
+final_df = full_df.withColumn("FullName",expr("case when (Action == 'U') then changesFullName else FullName end"))
+final_df = final_df.withColumn("City", expr("case when (Action == 'U') then changesCity else City end"))
+# final_df.show()
+
+print('******************** Delete completed **********************')
+final_df = final_df.filter((col('Action') != 'D') | (col('Action').isNull()))
+# final_df.show()
+
+print('******************** Preparing for insert ***************************')
+final_df = final_df.select('id', 'FullName', 'City')
+final_df.show()
+print('******************** new records ***********************')
+new_records_df = changes_df.filter(col('Action') == 'I').select('changesID', 'changesFullName', 'changesCity')
+# new_records_df.show()
+print('******************* existing + new records **********************')
+final_df = final_df.union(new_records_df)
+# final_df.show(200)
+
+import boto3    
+s3 = boto3.resource('s3')
+bucket = s3.Bucket('my-cdc-project-output-bucket')
+bucket.objects.all().delete()
+    
+final_df.write.mode("append").options(header='True', delimiter=',').csv(target_bucket)
+
+job.commit()

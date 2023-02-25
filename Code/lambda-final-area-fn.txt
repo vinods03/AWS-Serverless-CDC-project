@@ -1,0 +1,68 @@
+import boto3, json, time
+
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+glue = boto3.client('glue')
+
+audit_table = dynamodb.Table('cdc-project-audit-table')
+crawler_name = 'final_area_crawler'
+
+def lambda_handler(event, context):
+    print('The event is: ', event)
+    
+    items_to_append = []
+    
+    for record in event['Records']:
+        print('The message id is ', record['messageId'])
+        
+        s3_event = json.loads(record['body'])
+        print('The s3 event is ', s3_event)
+        
+        for subrecord in s3_event['Records']:
+            bucket_name = subrecord['s3']['bucket']['name']
+            file_name = subrecord['s3']['object']['key']
+            file_size = subrecord['s3']['object']['size']
+            file_etag = subrecord['s3']['object']['eTag']
+            print('The bucket name is ', bucket_name)
+            print('The file name is ', file_name)
+            print('The file size is ', file_size)
+            print('The file eTag is ', file_etag)
+            
+            item = {'file_name': file_name, 'layer_name': 'final_layer', 'file_size': file_size, 'file_etag': file_etag, 'create_timestamp': time.strftime("%H:%M:%S",time.localtime())}
+            items_to_append.append(item)
+            
+    if glue.get_crawler(Name = crawler_name)['Crawler']['State'] == 'READY':
+    
+        try:      
+            
+            glue.start_crawler(Name = crawler_name)
+            print('Glue crawler ', crawler_name, ' started successfully')
+            
+            crawler_run_state = glue.get_crawler(Name = crawler_name)['Crawler']['State']
+            print('Glue crawler run status ',crawler_run_state)
+            
+            while (glue.get_crawler(Name = crawler_name)['Crawler']['State'] != 'READY'):
+                time.sleep(15)
+            
+            print(crawler_name, ' has completed successfully')
+            
+        except Exception as e:
+            
+            print('Glue exception. The exception is ', e)
+            
+    else:
+        
+        print('The Glue crawler ',crawler_name, ' is not in READY state' )
+        
+           
+    try:
+        with audit_table.batch_writer() as batch:
+            for item in items_to_append:
+                batch.put_item(item)
+        print('Audit table loaded successfully')
+    except Exception as e:
+        print('Audit table load failed with exception ', e)
+        
+    
+        
+    

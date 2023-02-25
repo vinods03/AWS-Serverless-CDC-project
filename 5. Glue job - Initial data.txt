@@ -1,0 +1,7 @@
+This spark Glue job gets file name as a parameter from landing area lambda function.
+The lambda function triggers this job only when the file name is like LOAD* -> This is how the initial data is delivered by DMS into S3.
+
+appName is a parameter set at the Glue job properties level.
+This glue job will simply rename the columns to the required columns and write into the target bucket.
+
+Refer Code/glue-job-initial-data.txt for the code.

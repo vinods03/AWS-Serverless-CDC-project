@@ -1,0 +1,12 @@
+This spark Glue job gets file name as a parameter from landing area lambda function.
+The lambda function triggers this job only when the file name is NOT like LOAD* -> Changed files are delivered with date-timestamp in the filee names.
+
+appName is a parameter set at the Glue job properties level.
+This job will perform update, delete and insert into dataframe. Also rename the columns as needed.
+Then load the data into the final S3 bucket.
+
+Note that write mode - "overwrite" - does not work in spark jobs because of lazy evaluation and the job fails.
+We use the "append" mode but then, before writing the transformed dataframe empty the S3 bucket that has the initial data.
+Note that, the transformed data is actually Initial data + Changed/New data.
+
+Refer Code/glue-job-final-data.txt for the code.

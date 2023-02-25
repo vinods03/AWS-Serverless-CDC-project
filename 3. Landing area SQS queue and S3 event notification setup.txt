@@ -1,0 +1,28 @@
+Create a landing-area-queue that allows notifications from the S3 bucket my-cdc-project-bucket
+
+{
+  "Version": "2012-10-17",
+  "Id": "123",
+  "Statement": [
+    {
+      "Sid": "456",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "s3.amazonaws.com"
+      },
+      "Action": "SQS:SendMessage",
+      "Resource": "arn:aws:sqs:us-east-1:aws-account-num:landing-area-queue",
+      "Condition": {
+        "StringEquals": {
+          "aws:SourceAccount": "aws-account-num"
+        },
+        "ArnLike": {
+          "aws:SourceArn": "arn:aws:s3:*:*:my-cdc-project-bucket"
+        }
+      }
+    }
+  ]
+}
+
+
+In the landing area bucket my-cdc-project-bucket, setup an event notification for .csv file creation events with the destination as the above queue.

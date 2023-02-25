@@ -1,0 +1,8 @@
+The lambda function on the landing area has a trigger on the landing area SQS queue.
+When a file arrives at the landing area S3 bucket, an event notification is sent to the landing area queue.
+This lambda function captures the file details like file name, file size, file etag etc. of the arrived file and then based on the file name triggers the Glue job that loads the initial data, with columns renamed into the final S3 bucket or the Glue CDC job that updates / deletes / inserts data into the final S3 bucket. 
+This lambda function also makes an entry into the DynamoDB audit table capturing teh details of the file that arrived in the landing area.
+
+Refer Code/lambda-landing-area-fn for the code.
+Make sure the laambda function has the privileges to read from the SQS queue, write into DynamoDB table and also to trigger Glue jobs.
+Change the timeout to 3 minutes, on the SQS trigger set the batch window to 1 minute and in the landing area SQS queue, set the visibility timeout to 5 minutes.

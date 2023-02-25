@@ -1,0 +1,8 @@
+The lambda function on the final area has a trigger on the final area SQS queue.
+When a file arrives at the final area S3 bucket, an event notification is sent to the final area queue.
+This lambda function then captures the file details like file name, file size, file etag etc. of the arrived file and makes an entry into the DynamoDB audit table.
+This lambda function also triggers a Glue Crawler so that the final data can be queried on Athena.
+
+Refer Code/lambda-final-area-fn for the code.
+Make sure the laambda function has the privileges to read from the SQS queue, write into DynamoDB table and also to trigger Glue crawler.
+Change the timeout to 3 minutes, on the SQS trigger set the batch window to 1 minute and in the final area SQS queue, set the visibility timeout to 5 minutes.

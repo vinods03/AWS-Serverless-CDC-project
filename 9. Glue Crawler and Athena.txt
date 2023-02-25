@@ -1,0 +1,4 @@
+Setup a Glue crawler with data source as the final area S3 bucket.
+
+This will get triggered every time a file is uploaded into the final area S3 bucket.
+Once this crawler completes, the final area S3 data can be queried on Athena

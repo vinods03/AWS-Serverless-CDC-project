@@ -5,4 +5,4 @@ The DMS service is set to migrate existing data and replicate ongoing changes.
 All the loads / changes done on the RDS MySQL database will be captured on the S3 data lake.  
 
 We are not using Redshift for storage or EMR for processing.  
-However DynamoDB is being used to capture audit information.  
+S3 is used for storage and glue jobs for processing. DynamoDB is being used to capture audit information.  
